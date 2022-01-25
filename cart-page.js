@@ -1,18 +1,18 @@
 import {local} from 'wix-storage';
+import {session} from 'wix-storage';
 import wixLocation from 'wix-location';
 import wixWindow from 'wix-window';
 import cart from 'wix-stores';
 import wixData from 'wix-data';
 
 $w.onReady(function () {
-
-	let userId = local.getItem("userId");
-	let experimentId = local.getItem("experimentId");
+	let userId = session.getItem("userId");
+	let experimentId = session.getItem("experimentId");
 
 	$w("#checkoutButton").onClick(function() {
 		cart.getCurrentCart()
 			.then((cart) => {
-				saveEvent(cart);
+				if(userId) saveEvent(cart);
 			})
 			.catch((error) => {
 				console.error(error);
@@ -28,13 +28,13 @@ $w.onReady(function () {
 		let item = "";
 
 		if(curUrl == "list" && wixLocation.query["page"] != undefined) curUrl = "list - page " + wixLocation.query["page"];
-		if (!cart) local.setItem("page", curUrl);
+		if (!cart) session.setItem("page", curUrl);
 		if(cart) {
 			item = "";
 			for(var i = 0; i < cart.lineItems.length; i++) {
 				itemsInCart.push(cart.lineItems[i].name.replace(/ /g, "-").toLowerCase() + "#" + cart.lineItems[i].quantity);
 			}
-			local.setItem("cartLocal", JSON.stringify(cart));
+			session.setItem("cartLocal", JSON.stringify(cart));
 		}
 		logEvent(userId, experimentId, curUrl, prevUrl, action, item, itemsInCart.join(" : "), cart );
 	}
