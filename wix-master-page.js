@@ -1,27 +1,23 @@
 import {local} from 'wix-storage';
+import {session} from 'wix-storage';
 import wixLocation from 'wix-location';
 import wixWindow from 'wix-window';
 import wixStores from 'wix-stores';
 import wixData from 'wix-data';
 
-let experimentId = wixLocation.baseUrl;
-let suppliedId = wixLocation.query["id"];
-
-if (suppliedId) {
-	local.setItem("userId", suppliedId);
-	local.setItem("experimentId", experimentId);
-}
-
-let userId = local.getItem("userId");
+let experimentId = session.getItem("experimentId");
+let userId = session.getItem("userId");
 
 $w.onReady(function () {
-	wixStores.getCurrentCart()
-		.then((cart) => {
-			if (suppliedId) {
-				local.setItem("cartLocal"+userId, JSON.stringify(cart));
-			}
 
-			if (userId) {
+	if (!userId) {
+		wixWindow.openLightbox("login");
+	} else {
+		wixStores.getCurrentCart()
+			.then((cart) => {
+
+				session.setItem("cartLocal"+userId, JSON.stringify(cart));
+
 				saveEvent();
 
 				wixLocation.onChange( (location) => {
@@ -29,37 +25,36 @@ $w.onReady(function () {
 				});
 
 				wixStores.onCartChanged((cart) => {
-					if (!suppliedId) saveEvent(cart);
-				});	
-			} else {
-				setTimeout(() => showLightbox(), 1000);
-			}						
-		})
-		.catch((error) => {
-			console.error(error);
-		});
+					saveEvent(cart);
+				});		
+								
+			})
+			.catch((error) => {
+				console.error(error);
+			});
+	}
 
 });
 
 function showLightbox(){
-	wixWindow.openLightbox("wcblightbox");
+	wixWindow.openLightbox("login");
 }
 
 function saveEvent(cart) {
-	let prevUrl = local.getItem("page"+userId);
+	let prevUrl = session.getItem("page"+userId);
 	let curUrl = wixLocation.path.join("/");
-	let previousQuantity = JSON.parse(local.getItem("cartLocal"+userId)).totals.quantity;//local.getItem("previousQuantity"+userId);
+	let previousQuantity = JSON.parse(session.getItem("cartLocal"+userId)).totals.quantity;//local.getItem("previousQuantity"+userId);
 	let action = "";
 	let itemsInCart = [];
 	let itemsInCartLocal = [];
 	let itemsInCartStr = "";
 	let itemsInCartObj = {};
 	let item = "";
-	let cartLocal = JSON.parse(local.getItem("cartLocal"+userId));
+	let cartLocal = JSON.parse(session.getItem("cartLocal"+userId));
 
 	if(!curUrl.length) curUrl = "list";
 	if(curUrl == "list" && wixLocation.query["page"] != undefined) curUrl = "list - page " + wixLocation.query["page"];
-	if (!cart) local.setItem("page"+userId, curUrl);
+	if (!cart) session.setItem("page"+userId, curUrl);
 
 	if(cart) {
 		// Determine if an item was added or removed based on quantity
@@ -106,7 +101,7 @@ function saveEvent(cart) {
 
 		itemsInCartStr = itemsInCart.join(" : ");
 		itemsInCartObj = cart;
-		local.setItem("cartLocal"+userId, JSON.stringify(cart));
+		session.setItem("cartLocal"+userId, JSON.stringify(cart));
 	} else {
 		if(cartLocal) {
 			// Create list of items in cart by name seperated by |
