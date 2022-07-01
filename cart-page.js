@@ -2,142 +2,80 @@ import {local} from 'wix-storage';
 import {session} from 'wix-storage';
 import wixLocation from 'wix-location';
 import wixWindow from 'wix-window';
-import wixStores from 'wix-stores';
+import cart from 'wix-stores';
 import wixData from 'wix-data';
 
-let experimentId = wixLocation.baseUrl;
-let suppliedId = wixLocation.query["id"];
-
-if (suppliedId) {
-	session.setItem("userId", suppliedId);
-	session.setItem("experimentId", experimentId);
-}
-
-let userId = session.getItem("userId");
-
 $w.onReady(function () {
-	wixStores.getCurrentCart()
-		.then((cart) => {
-			if (suppliedId) {
-				session.setItem("cartLocal"+userId, JSON.stringify(cart));
+	let userId = session.getItem("userId");
+	let experimentId = session.getItem("experimentId");
+
+	$w("#checkoutButton").onClick(function() {
+		cart.getCurrentCart()
+			.then((cart) => {
+				if(userId) saveEvent(cart,'checkout');
+			})
+			.catch((error) => {
+				console.error(error);
+			});
+			wixWindow.openLightbox("thankyou");
+	});
+		
+	function saveEvent(cart,actionText) {
+		let prevUrl = "cart";
+		let curUrl = "cart";
+		let action = actionText;
+		let itemsInCart = [];
+		let item = "";
+
+		if(curUrl == "list" && wixLocation.query["page"] != undefined) curUrl = "list - page " + wixLocation.query["page"];
+		if (!cart) session.setItem("page", curUrl);
+		if(cart) {
+			item = "";
+			for(var i = 0; i < cart.lineItems.length; i++) {
+				itemsInCart.push(cart.lineItems[i].name.replace(/ /g, "-").toLowerCase() + "#" + cart.lineItems[i].quantity);
 			}
+			session.setItem("cartLocal", JSON.stringify(cart));
+		}
+		logEvent(userId, experimentId, curUrl, prevUrl, action, item, itemsInCart.join(" : "), cart );
+		wixWindow.openLightbox("thankyou");
+	}
 
-			if (userId) {
-				saveEvent();
+	function logEvent (userId, experimentId, url, referrer, action, item, itemsInCart, cart ) {
 
-				wixLocation.onChange( (location) => {
-					saveEvent();
-				});
+		const time = new Date();
+		let h = addZero(time.getHours(), 2);
+		let m = addZero(time.getMinutes(), 2);
+		let s = addZero(time.getSeconds(), 2);
+		let ms = addZero(time.getMilliseconds(), 3);
+		let dateTime = h + ":" + m + ":" + s + ":" + ms;
 
-				wixStores.onCartChanged((cart) => {
-					if (!suppliedId) saveEvent(cart);
-				});	
-			} else {
-				setTimeout(() => showLightbox(), 1000);
-			}						
-		})
-		.catch((error) => {
-			console.error(error);
-		});
+		let toInsert = {
+			"userId": userId,
+			"experimentId": experimentId,
+			"url": (url.length) ? url : "list",
+			"referrer": referrer,	
+			"action": action,
+			"item": item,
+			"itemsInCart": itemsInCart,
+			"cart": cart,
+			"time": time.getTime(),
+			"dateTime": dateTime			
+		};
+
+		wixData.insert("UserTracking", toInsert)
+			.then( (results) => {
+				//console.log(results); 
+			})
+			.catch( (err) => {
+				console.error(err);
+			});
+	}
+
+	function addZero(x, n) {
+		while (x.toString().length < n) {
+			x = "0" + x;
+		}
+		return x;
+	}
 
 });
-
-function showLightbox(){
-	wixWindow.openLightbox("wcblightbox");
-}
-
-function saveEvent(cart) {
-	let prevUrl = session.getItem("page"+userId);
-	let curUrl = wixLocation.path.join("/");
-	let previousQuantity = JSON.parse(session.getItem("cartLocal"+userId)).totals.quantity;//local.getItem("previousQuantity"+userId);
-	let action = "";
-	let itemsInCart = [];
-	let itemsInCartLocal = [];
-	let itemsInCartStr = "";
-	let itemsInCartObj = {};
-	let item = "";
-	let cartLocal = JSON.parse(session.getItem("cartLocal"+userId));
-
-	if(!curUrl.length) curUrl = "list";
-	if(curUrl == "list" && wixLocation.query["page"] != undefined) curUrl = "list - page " + wixLocation.query["page"];
-	if (!cart) session.setItem("page"+userId, curUrl);
-
-	if(cart) {
-		// Determine if an item was added or removed based on quantity
-		if(cart.totals.quantity < previousQuantity) {
-			action = "removed";
-		}
-
-		// Determine if an item was added or removed based on quantity
-		if(cart.totals.quantity > previousQuantity) {
-			action = "added";
-		}
-		
-		// Create list of items in cart by name seperated by |
-		for(var i = 0; i < cart.lineItems.length; i++) {
-			itemsInCart.push(cart.lineItems[i].name.replace(/ /g, "-").toLowerCase() + "#" + cart.lineItems[i].quantity);
-		}
-
-		// If cart local figure out what item was added or removed
-		if(cartLocal) {
-			// Create list of items in cart by name seperated by |
-			for(var i = 0; i < cartLocal.lineItems.length; i++) {
-				itemsInCartLocal.push(cartLocal.lineItems[i].name.replace(/ /g, "-").toLowerCase() + "#" + cartLocal.lineItems[i].quantity);
-			}	
-
-			// Figure out what item was added or removed from cart
-			if(action == "added") {
-				for(var i = 0; i < itemsInCart.length; i++) {
-					if(!itemsInCartLocal.includes(itemsInCart[i])) {
-						item = itemsInCart[i].split("#")[0];
-						break;
-					}
-				}
-			} else {
-				for(var i = 0; i < itemsInCartLocal.length; i++) {
-					if(!itemsInCart.includes( itemsInCartLocal[i])) {
-						item = itemsInCartLocal[i].split("#")[0];
-						break;
-					}
-				}					
-			}
-		} else {
-			item = cart.lineItems[0].name.replace(/ /g, "-").toLowerCase();
-		}
-
-		itemsInCartStr = itemsInCart.join(" : ");
-		itemsInCartObj = cart;
-		session.setItem("cartLocal"+userId, JSON.stringify(cart));
-	} else {
-		if(cartLocal) {
-			// Create list of items in cart by name seperated by |
-			for(var i = 0; i < cartLocal.lineItems.length; i++) {
-				itemsInCartLocal.push(cartLocal.lineItems[i].name.replace(/ /g, "-").toLowerCase() + "#" + cartLocal.lineItems[i].quantity);
-			}	
-			itemsInCartStr = itemsInCartLocal.join(" : ");
-			itemsInCartObj = cartLocal;
-		}
-	}
-	logEvent(userId, experimentId, curUrl, prevUrl, action, item, itemsInCartStr, itemsInCartObj );
-}
-
-function logEvent (userId, experimentId, url, referrer, action, item, itemsInCart, cart) {
-	let toInsert = {
-		"userId": userId,
-		"experimentId": experimentId,
-		"url": (url.length) ? url : "list",
-		"referrer": referrer,	
-		"action": action,
-		"item": item,
-		"itemsInCart": itemsInCart,
-		"cart": cart
-	};
-
-	wixData.insert("UserTracking", toInsert)
-		.then( (results) => {
-			//console.log(results); 
-		})
-		.catch( (err) => {
-			console.error(err);
-		});
-}
