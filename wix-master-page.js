@@ -12,6 +12,7 @@ $w.onReady(function () {
 
 	if (!userId) {
 		wixWindow.openLightbox("login");
+		setTimeout(() => $w("#logoutbtn").show(), 60000);
 	} else {
 		wixStores.getCurrentCart()
 			.then((cart) => {
@@ -40,11 +41,11 @@ function showLightbox(){
 	wixWindow.openLightbox("login");
 }
 
-function saveEvent(cart) {
+function saveEvent(cart,actionTxt) {
 	let prevUrl = session.getItem("page"+userId);
 	let curUrl = wixLocation.path.join("/");
 	let previousQuantity = JSON.parse(session.getItem("cartLocal"+userId)).totals.quantity;//local.getItem("previousQuantity"+userId);
-	let action = "";
+	let action = (actionTxt)? actionTxt: "";
 	let itemsInCart = [];
 	let itemsInCartLocal = [];
 	let itemsInCartStr = "";
@@ -116,6 +117,14 @@ function saveEvent(cart) {
 }
 
 function logEvent (userId, experimentId, url, referrer, action, item, itemsInCart, cart) {
+
+	const time = new Date();
+	let h = addZero(time.getHours(), 2);
+	let m = addZero(time.getMinutes(), 2);
+	let s = addZero(time.getSeconds(), 2);
+	let ms = addZero(time.getMilliseconds(), 3);
+	let dateTime = h + ":" + m + ":" + s + ":" + ms;
+
 	let toInsert = {
 		"userId": userId,
 		"experimentId": experimentId,
@@ -124,7 +133,9 @@ function logEvent (userId, experimentId, url, referrer, action, item, itemsInCar
 		"action": action,
 		"item": item,
 		"itemsInCart": itemsInCart,
-		"cart": cart
+		"cart": cart,
+		"time": time.getTime(),
+		"dateTime": dateTime
 	};
 
 	wixData.insert("UserTracking", toInsert)
@@ -134,4 +145,16 @@ function logEvent (userId, experimentId, url, referrer, action, item, itemsInCar
 		.catch( (err) => {
 			console.error(err);
 		});
+}
+
+$w("#logoutbtn").onClick(function() {
+	saveEvent(null, "logout");
+	wixWindow.openLightbox("thankyou");
+});
+
+function addZero(x, n) {
+  while (x.toString().length < n) {
+    x = "0" + x;
+  }
+  return x;
 }
